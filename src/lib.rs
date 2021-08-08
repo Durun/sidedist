@@ -15,12 +15,15 @@ struct Sidedist {
 
 struct SidedistParameters {
     threshold: AtomicFloat,
+    sidechain_gain: AtomicFloat,
 }
+const SIDECHAIN_GAIN_DEFALUT: f32 = 0.2f32;
 
 impl Default for SidedistParameters {
     fn default() -> Self {
         SidedistParameters {
             threshold: AtomicFloat::new(1.0),
+            sidechain_gain: AtomicFloat::new(SIDECHAIN_GAIN_DEFALUT),
         }
     }
 }
@@ -35,7 +38,7 @@ impl Plugin for Sidedist {
             inputs: 4,
             outputs: 2,
 
-            parameters: 1,
+            parameters: 2,
 
             ..Default::default()
         }
@@ -56,6 +59,7 @@ impl Plugin for Sidedist {
     fn process(&mut self, buffer: &mut AudioBuffer<f32>) {
         // Read the amplitude from the parameter object
         let threshold = self.params.threshold.get();
+        let sidechain_amplitude = self.params.sidechain_gain.get() / SIDECHAIN_GAIN_DEFALUT;
         // First, we destructure our audio buffer into an arbitrary number of
         // input and output buffers.  Usually, we'll be dealing with stereo (2 of each)
         // but that might change.
@@ -71,8 +75,8 @@ impl Plugin for Sidedist {
             let sidechain: &[f32] = sidechain;
             let output: &mut [f32] = output;
             for ((input_sample, sidechain_sample), output_sample) in input.iter().zip(sidechain).zip(output) {
-                let limit_upper = max(0f32, threshold - *sidechain_sample);
-                let limit_lower = min(0f32, -threshold - *sidechain_sample);
+                let limit_upper = max(0f32, threshold - *sidechain_sample * sidechain_amplitude);
+                let limit_lower = min(0f32, -threshold - *sidechain_sample * sidechain_amplitude);
                 *output_sample = clip(*input_sample, limit_upper, limit_lower);
             }
         }
@@ -91,6 +95,7 @@ impl PluginParameters for SidedistParameters {
     fn get_parameter_text(&self, index: i32) -> String {
         match index {
             0 => format!("{:.2}", self.threshold.get()),
+            1 => format!("{:.2}", self.sidechain_gain.get() / SIDECHAIN_GAIN_DEFALUT),
             _ => "".to_string(),
         }
     }
@@ -99,6 +104,7 @@ impl PluginParameters for SidedistParameters {
     fn get_parameter_name(&self, index: i32) -> String {
         match index {
             0 => "Threshold",
+            1 => "Sidechain Gain",
             _ => "",
         }
             .to_string()
@@ -108,6 +114,7 @@ impl PluginParameters for SidedistParameters {
     fn get_parameter(&self, index: i32) -> f32 {
         match index {
             0 => self.threshold.get(),
+            1 => self.sidechain_gain.get(),
             _ => 0.0,
         }
     }
@@ -117,6 +124,7 @@ impl PluginParameters for SidedistParameters {
         #[allow(clippy::single_match)]
         match index {
             0 => self.threshold.set(val),
+            1 => self.sidechain_gain.set(val),
             _ => (),
         }
     }
